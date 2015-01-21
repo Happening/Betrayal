@@ -54,15 +54,7 @@ exports.render = !->
 	
 	showRound = Obs.create Db.shared.peek('round')
 	Obs.observe !->
-		nr = Db.shared.get('round')
-		if nr>0
-			Obs.onTime 0, !-> showRound.set nr
-			Obs.onTime 500, !-> showRound.set nr-1
-			Obs.onTime 1000, !-> showRound.set nr
-			Obs.onTime 1500, !-> showRound.set nr-1
-			Obs.onTime 2000, !-> showRound.set nr
-			Obs.onTime 2500, !-> showRound.set nr-1
-			Obs.onTime 3000, !-> showRound.set nr
+		showRound.set Db.shared.get('round')
 
 	roundArrow = (dir,enable) !->
 		Dom.div !->
@@ -344,6 +336,12 @@ exports.render = !->
 						selected = cn
 						return
 				Modal.show country.name, !->
+					Ui.avatar Plugin.userAvatar(owner), !->
+						Dom.style
+							position: 'absolute'
+							right: '-10px'
+							top: '-10px'
+					, 50, (!-> Plugin.userInfo(owner))
 					Dom.text tr "Occupied by %1.",userNames[owner]
 					return unless readyOrders
 					forces = {}
@@ -392,7 +390,7 @@ exports.renderSettings = !->
 			Dom.text tr "Round time in minutes"
 		Num.render
 			name: 'time'
-			value: (if Db.shared then Db.shared.peek('interval') else 0)||120
+			value: (if Db.shared then Db.shared.peek('interval') else 0)||360
 	if Db.shared
 		Form.check
 			name: 'restart'

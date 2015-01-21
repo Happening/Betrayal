@@ -153,10 +153,6 @@ makeMap = ->
 	
 	savePersonal players, personal
 	setTimer()
-	
-	Event.create
-		unit: 'game'
-		text: tr "A new game has started!"
 
 
 setTimer = !->
@@ -254,9 +250,15 @@ exports.go = !->
 	else
 		Db.shared.set round, 'owners', newOwners
 		Db.shared.set 'round', round
+
+		# Only send events to participants who have given orders in the last 3 rounds.
+		if round>3
+			forIds = (userId for userId,lastRound of Db.backend.get('active') when round <= lastRound+3)
+
 		Event.create
 			unit: 'game'
 			text: tr "Next round!"
+			for: forIds
 	log "done"
 
 exports.onInstall = (cfg = {}) !->
@@ -264,12 +266,17 @@ exports.onInstall = (cfg = {}) !->
 	onConfig(cfg)
 
 exports.onConfig = onConfig = (cfg) !->
-	Db.shared.set 'interval', cfg.time if cfg.time
-	makeMap() if cfg.restart
+	Db.shared.set 'interval', Math.max(cfg.time, 1) if cfg.time
+	if cfg.restart
+		makeMap()
+		Event.create
+			unit: 'game'
+			text: tr "New game started!"
 
 exports.client_order = (cn,order) !->
 	Db.shared.set 'idle', 0
 	Db.personal().set 'orders', cn, order
+	Db.backend.set 'active', Plugin.userId(), Db.shared.get('round')
 
 savePersonal = (players, personal) !->
 	for player,x of players
