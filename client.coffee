@@ -37,6 +37,7 @@ blend = (p, c0, c1='#ffffff') ->
 	"#"+(0x1000000+(Math.round((r2-r1)*p)+r1)*0x10000+(Math.round((g2-g1)*p)+g1)*0x100+(Math.round((b2-b1)*p)+b1)).toString(16).slice(1)
 
 exports.render = !->
+	width = Dom.viewport.get('width')
 	userId = Plugin.userId()
 	countries = Db.shared.get('countries')
 	players = Db.shared.peek('players')
@@ -67,19 +68,23 @@ exports.render = !->
 				display: "inline-block"
 				verticalAlign: "middle"
 				borderStyle: "solid"
-				borderWidth: "12px #{if dir>0 then 0 else 24}px 12px #{if dir>0 then 24 else 0}px"
+				borderWidth: "14px #{if dir>0 then 0 else 28}px 14px #{if dir>0 then 28 else 0}px"
 				borderColor: t+" "+(if dir>0 then t else c)+" "+t+" "+(if dir>0 then c else t)
 			if enable
 				Dom.onTap !->
 					showRound.set Math.min(Math.max(0,showRound.peek()+dir), Db.shared.peek('round'))
 		
 					
-	infoItem = (title,content) !->
+	infoItem = (title,content,first) !->
+		Dom.div !-> Dom.style Flex: 1
+		Form.vSep()
+		Dom.div !-> Dom.style Flex: 1
 		Dom.div !->
-			Dom.style textAlign: "center", Flex: true
-			Dom.div !->
-				Dom.text title
-				Dom.style fontWeight: "bold"
+			Dom.style textAlign: "center"
+			if title
+				Dom.div !->
+					Dom.text title
+					Dom.style fontWeight: "bold"
 			content()
 
 
@@ -88,6 +93,31 @@ exports.render = !->
 		Dom.style
 			padding: '6px'
 			Box: "top"
+
+		Dom.div !-> Dom.style Flex: 1
+
+		Dom.div !->
+			Dom.style textAlign: "center", fontSize: "180%", fontWeight: "bold", padding: "0 6px"
+			Dom.text "?"
+			Dom.onTap !->
+				require('page').nav !->
+					require('markdown').render """
+## Betrayal
+Betrayal is a board game for 3 up to about 50 players. The game starts with every Happening member occupying a number of countries, one of which has a flag. The object of the game is to gain control over a set number of flags. The presence of a flag is only revealed once you occupy a country.
+
+## Giving orders
+The game is played in rounds that last for 6 hours (by default). During a round, players can assign orders to each of the countries they occupy. An order can be:
+- Do nothing. All armies in the country will defend the country if necessary: **20 defence points**.
+- Attack. Half the armies in the country will go out on an attack to the selected country, while the other half stays put to defend: **10 attack points, 10 defence points**.
+- Assist another player. Same as above, only the attack will benefit another player, if successful. There is a 1 point cooperation bonus: **11 attack points, 10 defence points**. If you attack a country on behalf of its current occupant, you will be helping in its defence.
+
+Orders are given by first tapping a country you control, and then tapping the target country (which can be the same, meaning 'do nothing'). Next you'll be asked on behalf of whom you're engaging in battle. In case you already occupy the selected country, it is assumed you'll assist in its defence.
+
+Orders given by other players will not be visible until they are executed at the end of the round. A country will only be taken over by a new player, if the attack by that player has more attack points than the attacks (or defence) mounted by any other players. When the points are equal, the current occupant stays put.
+
+## Hint
+The game can usually only be won by seeking allies, and betraying them later on. Hence the name of the game.
+"""
 		
 		Obs.observe !->
 			if winner = Db.shared.get('winner')
@@ -98,7 +128,7 @@ exports.render = !->
 					Time.deltaText Db.shared.get('next'), [60,60,"%1m", 1,1,"%1s", 0,1,"1s"]
 					Dom.onTap !->
 						Modal.show tr "Time until the end of this round. Make sure you give your orders before then. Only at the end of the round will you see orders given by other players, and will all orders be executed, all at once."
-	
+
 		infoItem tr("goal ⚑"), !->
 			goal = Db.shared.get 'goal'
 			Dom.text tr "%1/%2", goal[0], goal[1]
@@ -107,32 +137,39 @@ exports.render = !->
 					goal = Db.shared.get 'goal'
 					Dom.userText tr "Of the %1 regions, %2 contain a flag. You can only see a flag once you have occupied its region. In order to win, you need to occupy the regions for any %3 flags at the same time.", countries.length, goal[1], goal[0]
 
-		infoItem tr("players"), !->
-			Dom.text userIds.length
-			Dom.onTap !->
-				renderPlayerColor = (player) !->
-					Dom.div !->
-						Dom.style
-							backgroundColor: players[player].color
-							display: 'inline-block'
-							color: 'white'
-							padding: '1px 4px'
-							margin: '1px 2px'
-							borderRadius: '2px'
-						Dom.text userNames[player]
-					Dom.text " "
-				Modal.show !->
-					renderPlayerColor userId
-					for u in userIds when u!=userId
-						renderPlayerColor u
+		if width>=300
+			infoItem tr("players"), !->
+				Dom.text userIds.length
+				Dom.onTap !->
+					renderPlayerColor = (player) !->
+						Dom.div !->
+							Dom.style
+								backgroundColor: players[player].color
+								display: 'inline-block'
+								color: 'white'
+								padding: '1px 4px'
+								margin: '1px 2px'
+								borderRadius: '2px'
+							Dom.text userNames[player]
+						Dom.text " "
+					Modal.show !->
+						renderPlayerColor userId
+						for u in userIds when u!=userId
+							renderPlayerColor u
 
 		
-		infoItem tr("round"), !->
+		infoItem false, !->
+			Dom.style padding: '8px 0'
 			round = Db.shared.get('round')
 			sr = showRound.get()
 			roundArrow -1,sr>0
 			Dom.text " "+sr+" "
 			roundArrow 1,sr<round
+			Dom.onTap !->
+				Modal.show tr "Round number. Tap the arrows to review any previous rounds."
+
+		Dom.div !-> Dom.style Flex: 1
+
 		canvasHeight -= Dom.height()
 	
 	Agent = Plugin.agent()
@@ -141,7 +178,6 @@ exports.render = !->
 		# samsung draws over random pixels when the viewport is not scrollable :S
 		canvasHeight++
 
-	width = Dom.viewport.get('width')
 	ratio = Db.shared.get('ratio') || 1.35
 	canvasHeight = width*ratio if Math.abs(ratio-canvasHeight/width)>0.25 # aspect ratios too different
 
@@ -308,9 +344,8 @@ exports.render = !->
 							title: countries[selected].name,
 							content: !->
 								Dom.div !->
-									Dom.style
-										maxHeight: '45%'
-										overflow: 'auto'
+									Dom.style maxHeight: '45%'
+									Dom.overflow()
 									Dom.div !->
 										Dom.text tr("Let's fight in %1-occupied %2! Whose side are we on?",userNames[owner],country.name)
 										Dom.style marginBottom: '8px'
@@ -336,12 +371,13 @@ exports.render = !->
 						selected = cn
 						return
 				Modal.show country.name, !->
-					Ui.avatar Plugin.userAvatar(owner), !->
-						Dom.style
+					Ui.avatar Plugin.userAvatar(owner),
+						style:
 							position: 'absolute'
 							right: '-10px'
 							top: '-10px'
-					, 50, (!-> Plugin.userInfo(owner))
+						size: 50
+						onTap: (!-> Plugin.userInfo(owner))
 					Dom.text tr "Occupied by %1.",userNames[owner]
 					return unless readyOrders
 					forces = {}

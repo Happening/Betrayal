@@ -3,7 +3,6 @@ Dom = require 'dom'
 Form = require 'form'
 Colors = require('plugin').colors()
 
-# The time input is kind of special, as it doesn't have a no-state value. So if the value wasn't set, a change is triggered immediately.
 exports.render = render = (opts) ->
 	opts = {} if typeof opts!='object'
 	if opts.onSave

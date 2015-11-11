@@ -236,7 +236,7 @@ exports.go = !->
 
 	winCnt = {}
 	for flag,x of flags
-		userId = owners[flag]
+		userId = newOwners[flag]
 		winCnt[userId] = (winCnt[userId]||0)+1
 	winner = false
 	for userId,cnt of winCnt
