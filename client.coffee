@@ -1,14 +1,16 @@
+Comments = require 'comments'
 Db = require 'db'
 Time = require 'time'
 Form = require 'form'
 Dom = require 'dom'
 Modal = require 'modal'
 Obs = require 'obs'
-Plugin = require 'plugin'
+App = require 'app'
 Server = require 'server'
 Ui = require 'ui'
 Num = require 'num'
 {tr} = require 'i18n'
+Page = require 'page'
 
 inPoly = (point, poly) ->
 	isOdd = false
@@ -37,29 +39,34 @@ blend = (p, c0, c1='#ffffff') ->
 	"#"+(0x1000000+(Math.round((r2-r1)*p)+r1)*0x10000+(Math.round((g2-g1)*p)+g1)*0x100+(Math.round((b2-b1)*p)+b1)).toString(16).slice(1)
 
 exports.render = !->
-	width = Dom.viewport.get('width')
-	userId = Plugin.userId()
+	width = Page.width()
+	userId = App.userId()
 	countries = Db.shared.get('countries')
 	players = Db.shared.peek('players')
 	userIds = []
 	userNames = {}
 	for player,x of players
 		userIds.push 0|player
-		userNames[player] = Plugin.userName(player)
+		userNames[player] = App.userName(player)
 	userIds.sort (a,b) ->
 		a = userNames[a]
 		b = userNames[b]
 		if a<b then -1 else if a>b then 1 else 0
 
-	Dom.style padding: 0
-	
+	Dom.style ChildMargin: '0'
+
+	Comments.enable
+		messages:
+			win: (c) -> tr("%1 won the game!", c.user)
+			next: (c) -> tr("Round %1", c.v)
+
 	showRound = Obs.create Db.shared.peek('round')
 	Obs.observe !->
 		showRound.set Db.shared.get('round')
 
 	roundArrow = (dir,enable) !->
 		Dom.div !->
-			c = if enable then Plugin.colors().highlight else "#666"
+			c = if enable then App.colors().highlight else "#666"
 			t = "transparent"
 			Dom.style
 				width: 0
@@ -73,31 +80,25 @@ exports.render = !->
 			if enable
 				Dom.onTap !->
 					showRound.set Math.min(Math.max(0,showRound.peek()+dir), Db.shared.peek('round'))
-		
-					
+
 	infoItem = (title,content,first) !->
-		Dom.div !-> Dom.style Flex: 1
 		Form.vSep()
-		Dom.div !-> Dom.style Flex: 1
 		Dom.div !->
-			Dom.style textAlign: "center"
+			Dom.style textAlign: "center", Flex: 1, overflow: 'hidden', textOverflow: 'ellipsis'
 			if title
 				Dom.div !->
 					Dom.text title
 					Dom.style fontWeight: "bold"
 			content()
 
-
-	canvasHeight = Dom.viewport.get('height')
+	canvasHeight = Page.height()
 	Dom.div !->
 		Dom.style
 			padding: '6px'
-			Box: "top"
-
-		Dom.div !-> Dom.style Flex: 1
+			Box: 'middle'
 
 		Dom.div !->
-			Dom.style textAlign: "center", fontSize: "180%", fontWeight: "bold", padding: "0 6px"
+			Dom.style textAlign: "center", fontSize: "180%", fontWeight: "bold", padding: "0 6px", width: '24px'
 			Dom.text "?"
 			Dom.onTap !->
 				require('page').nav !->
@@ -118,7 +119,7 @@ Orders given by other players will not be visible until they are executed at the
 ## Hint
 The game can usually only be won by seeking allies, and betraying them later on. Hence the name of the game.
 """
-		
+
 		Obs.observe !->
 			if winner = Db.shared.get('winner')
 				infoItem tr("winner"), !->
@@ -134,32 +135,28 @@ The game can usually only be won by seeking allies, and betraying them later on.
 			Dom.text tr "%1/%2", goal[0], goal[1]
 			Dom.onTap !->
 				Modal.show tr("Goal"), !->
-					goal = Db.shared.get 'goal'
-					Dom.userText tr "Of the %1 regions, %2 contain a flag. You can only see a flag once you have occupied its region. In order to win, you need to occupy the regions for any %3 flags at the same time.", countries.length, goal[1], goal[0]
+					Dom.div !->
+						goal = Db.shared.get 'goal'
+						Dom.userText tr "Of the %1 regions, %2 contain a flag. You can only see a flag once you have occupied its region. In order to win, you need to occupy the regions for any %3 flags at the same time.", countries.length, goal[1], goal[0]
 
 		if width>=300
 			infoItem tr("players"), !->
 				Dom.text userIds.length
 				Dom.onTap !->
 					renderPlayerColor = (player) !->
-						Dom.div !->
-							Dom.style
+						Ui.item
+							content: userNames[player]
+							avatar: App.userAvatar(player)
+							style:
 								backgroundColor: players[player].color
-								display: 'inline-block'
 								color: 'white'
-								padding: '1px 4px'
-								margin: '1px 2px'
-								borderRadius: '2px'
-							Dom.text userNames[player]
-						Dom.text " "
 					Modal.show !->
 						renderPlayerColor userId
 						for u in userIds when u!=userId
 							renderPlayerColor u
 
-		
 		infoItem false, !->
-			Dom.style padding: '8px 0'
+			Dom.style padding: '8px 0', minWidth: '75px'
 			round = Db.shared.get('round')
 			sr = showRound.get()
 			roundArrow -1,sr>0
@@ -168,11 +165,9 @@ The game can usually only be won by seeking allies, and betraying them later on.
 			Dom.onTap !->
 				Modal.show tr "Round number. Tap the arrows to review any previous rounds."
 
-		Dom.div !-> Dom.style Flex: 1
+		canvasHeight -= (Dom.height() + 60)
 
-		canvasHeight -= Dom.height()
-	
-	Agent = Plugin.agent()
+	Agent = App.agent()
 	canvasMultiplier = Agent.canvasMultiplier()
 	if Agent.samsung and Agent.android<4.4 and Agent.android>=4
 		# samsung draws over random pixels when the viewport is not scrollable :S
@@ -243,7 +238,7 @@ The game can usually only be won by seeking allies, and betraying them later on.
 				ctx.fill()
 				ctx.strokeStyle = "#fff"
 				ctx.stroke()
-				
+
 				center = country.center
 
 				reverseOrders.forEach cn, (order) !->
@@ -256,7 +251,7 @@ The game can usually only be won by seeking allies, and betraying them later on.
 							if corner1.x==corner2.x and corner1.y==corner2.y
 								corners.push corner1
 					return if corners.length!=2 # invalid order, no neighbours
-					
+
 					# assert: target in country.neighbours
 					ctx.beginPath()
 					ncenter = interpolate(center, interpolate(corners[0], corners[1]), 0.5)
@@ -294,7 +289,7 @@ The game can usually only be won by seeking allies, and betraying them later on.
 					ctx.fill()
 					ctx.stroke()
 					ctx.restore()
-		
+
 		for country,cn in countries
 			drawCountry country,cn
 
@@ -329,7 +324,7 @@ The game can usually only be won by seeking allies, and betraying them later on.
 									color: 'white'
 									fontWeight: 'bold'
 									backgroundColor: players[u].color
-								Ui.avatar Plugin.userAvatar u
+								Ui.avatar App.userAvatar u
 								Dom.div !->
 									Dom.style marginLeft: '8px'
 									Dom.text userNames[u]
@@ -344,15 +339,12 @@ The game can usually only be won by seeking allies, and betraying them later on.
 							title: countries[selected].name,
 							content: !->
 								Dom.div !->
-									Dom.style maxHeight: '45%'
-									Dom.overflow()
-									Dom.div !->
-										Dom.text tr("Let's fight in %1-occupied %2! Whose side are we on?",userNames[owner],country.name)
-										Dom.style marginBottom: '8px'
-									renderPlayerOption userId, tr('attack')
-									renderPlayerOption owner, tr('assist defence')
-									for u in userIds when u not in [userId,owner]
-										renderPlayerOption u, tr('assist attack')
+									Dom.text tr("Let's fight in %1-occupied %2! Whose side are we on?",userNames[owner],country.name)
+									Dom.style marginBottom: '8px'
+								renderPlayerOption userId, tr('attack')
+								renderPlayerOption owner, tr('assist defence')
+								for u in userIds when u not in [userId,owner]
+									renderPlayerOption u, tr('assist attack')
 							cb: setOrder
 							buttons: [false,tr('Never mind')]
 						return
@@ -371,13 +363,15 @@ The game can usually only be won by seeking allies, and betraying them later on.
 						selected = cn
 						return
 				Modal.show country.name, !->
-					Ui.avatar Plugin.userAvatar(owner),
+					Dom.style
+						padding: '12px'
+					Ui.avatar App.userAvatar(owner),
 						style:
 							position: 'absolute'
-							right: '-10px'
-							top: '-10px'
+							right: '-8px'
+							top: '-8px'
 						size: 50
-						onTap: (!-> Plugin.userInfo(owner))
+						onTap: (!-> App.showMemberInfo(owner))
 					Dom.text tr "Occupied by %1.",userNames[owner]
 					return unless readyOrders
 					forces = {}
@@ -420,7 +414,7 @@ The game can usually only be won by seeking allies, and betraying them later on.
 
 exports.renderSettings = !->
 	Dom.div !->
-		Dom.style Box: "middle", padding: '12px 40px 12px 8px'
+		Dom.style Box: "middle"
 		Dom.div !->
 			Dom.style Flex: true
 			Dom.text tr "Round time in minutes"
@@ -428,6 +422,10 @@ exports.renderSettings = !->
 			name: 'time'
 			value: (if Db.shared then Db.shared.peek('interval') else 0)||360
 	if Db.shared
+		Form.input
+			name: '_title'
+			text: tr 'Game title'
+			value: App.title()
 		Form.check
 			name: 'restart'
 			text: tr 'Restart'

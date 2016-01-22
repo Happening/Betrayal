@@ -1,5 +1,6 @@
+App = require 'app'
+Comments = require 'comments'
 Db = require 'db'
-Plugin = require 'plugin'
 Timer = require 'timer'
 Event = require 'event'
 {Voronoi} = require 'voronoi'
@@ -46,7 +47,7 @@ hslToRgb = (h, s, l) ->
 	'#' + (("0"+Math.round(c*255).toString(16)).substr(-2) for c in rgb).join ''
 
 makeMap = ->
-	userIds = Plugin.userIds()
+	userIds = App.userIds()
 
 	count = Math.min(10 + userIds.length * 4, 45)
 	count = (0|(count/userIds.length)) * userIds.length
@@ -157,7 +158,7 @@ makeMap = ->
 
 setTimer = !->
 	seconds = (Db.shared.get('interval')||120)*60
-	Db.shared.set 'next', 0|Plugin.time()+seconds
+	Db.shared.set 'next', 0|App.time()+seconds
 	Timer.cancel 'go'
 	Timer.set seconds*1000, 'go'
 
@@ -244,9 +245,13 @@ exports.go = !->
 	if winner
 		Db.shared.set 'winner', winner
 		Db.shared.set 'flags', flags
-		Event.create
-			unit: 'game'
-			text: tr "We have a winner!"
+
+		# post system message and event
+		Comments.post
+			s: "win"
+			u: winner
+			pushText: tr "We have a winner!"
+			path: '/'
 	else
 		Db.shared.set round, 'owners', newOwners
 		Db.shared.set 'round', round
@@ -255,9 +260,12 @@ exports.go = !->
 		if round>3
 			forIds = (userId for userId,lastRound of Db.backend.get('active') when round <= lastRound+3)
 
-		Event.create
-			unit: 'game'
-			text: tr "Next round!"
+		# post system message and event
+		Comments.post
+			s: "next"
+			v: round
+			pushText: tr "Next round!"
+			path: '/'
 			for: forIds
 	log "done"
 
@@ -276,7 +284,7 @@ exports.onConfig = onConfig = (cfg) !->
 exports.client_order = (cn,order) !->
 	Db.shared.set 'idle', 0
 	Db.personal().set 'orders', cn, order
-	Db.backend.set 'active', Plugin.userId(), Db.shared.get('round')
+	Db.backend.set 'active', App.userId(), Db.shared.get('round')
 
 savePersonal = (players, personal) !->
 	for player,x of players
